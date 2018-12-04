@@ -1,0 +1,184 @@
+\title{Overlapping Group Lasso Via ADMM in Python}
+\author{Daniel Kessler}
+
+\documentclass{article}
+
+\usepackage{amsmath,amssymb,physics,framed,mathtools}
+\usepackage{algorithm,algorithmicx,algpseudocode}
+\usepackage[utf8]{inputenc}
+\usepackage[style=numeric,citestyle=numeric]{biblatex}
+\addbibresource{refs.bib}
+
+\AtEveryBibitem{
+    \clearfield{urlyear}
+    \clearfield{urlmonth}
+}
+
+\usepackage{hyperref}
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  In this report, we present a brief summary of the overlapping group Lasso, showing how it can be motivated as an extension first of the regular lasso to a group setting, and then as a further generalization thereof.
+  We then provide some background on the Alternating Direction Method of Multipliers (ADMM) algorithm, and show why it is a reasonable choice for solving overlapping group Lasso problems.
+  Next, we derive the ADMM algorithm for overlapping group Lasso, and present a software implementation in python that implements this algorithm.
+  Finally, we show some experimental results on synthetic data and comment on parameter tuning, as well as alternative formulations of the ADMM algorithm as applied to this problem.
+\end{abstract}
+
+\section{Note to Reviewer}
+\label{sec:note-reviewer}
+
+The implementation of the procedure was incomplete at the time of submission, and thus simulation results are absent from this version of the draft.
+The code and this report are both on github at \url{http://github.com/dankessler/608a-project}, and the reviewer is asked to please conduct their review on the latest version of this PDF\footnote{which by the time you read this, is hopefully more complete}, which is available directly at \href{https://github.com/dankessler/608a-project/blob/master/report/kesslerd-stats608a-project-report.pdf}{this link}.
+
+\section{Notation}
+\label{sec:notation}
+
+First, we fix notation.
+Much of our derivations are based on \cite{boyd_distributed_2011}, we will use different notation than is typically deployed in more statistics-oriented treatments of the Lasso.
+Let $A \in \mathbb{R}^{m \times n}$ be a (fixed) design matrix, with $m$ observations and $n$ covariates, and $b \in \mathbb{R}^m$ a vector of observations.
+We assume that our $y$ follows $y = X \beta + \epsilon$, where $\beta \in \mathbb{R}^p$ is an unknown weight vector, and $\epsilon$ are independent and identically distributed errors (for a simple case, we can take them to follow $\mathcal{N}(0,\sigma^2)$ for some fixed, but unknown, $\sigma^2$.
+When norms are not otherwise specified, they are taken to be the 2-norm, i.e., $\lVert \cdot \rVert \overset{\Delta}{=} \lVert \cdot \rVert_2$.
+We will generally be interested in minimizing the least squares loss, i.e., finding $\hat{x} \in \operatorname{argmin}_x \left\| Ax - b \right\|$.
+Note: A great deal of the treatment below, including that of the lasso, group lasso, overlapping group lasso, and ADMM is taken from \cite{boyd_distributed_2011}.
+We explicitly cite this text at key points, but we do not cite \emph{every} claim which is based on \cite{boyd_distributed_2011} to avoid cluttering the text.
+
+\section{Background: Overlapping Group Lasso}
+\label{sec:backgr-group-lasso}
+In order to introduce the overlapping group Lasso, we will first discuss the regular lasso and then show how it can be extended to the (non-overlapping) group lasso setting.
+The Lasso is a highly popular method that is especially useful in high dimensional settings, i.e., where $n \gg m$.
+In this setting (presuming $A$ is of full rank), the OLS estimate is no longer uniquely determined, as the there exist infinitely many candidate $\hat{x}$ that yield zero loss.
+Instead, one can instead minimize a \emph{regularized problem} in order to obtain a \emph{sparse solution}.
+While various (essentially equivalent) formulations of the lasso objective exist, for our purposes we will define the primal lasso problem as
+\begin{equation}
+  \label{eq:1}
+  \operatorname*{min}_x \frac{1}{2} \lVert Ax - b \rVert_2^2 + \lambda \lVert x \rVert_1,
+\end{equation}
+where $\lambda > 0$ determines the amount of regularization.
+As $\lambda \to 0$, we see that \eqref{eq:1} becomes the OLS problem, and as $\lambda \to \infty$, $x \to 0$.
+One advantage of the lasso is that it will typically recover a sparse solution, i.e., a solution where the minimizing $\hat{x}$ has many entries that are identically 0.
+
+In the setting where covariates can be organized into groups, as may be natural in many applied settings (e.g., where the covariates are gene expression levels, and genes can be organized based on chromosome or location), we may wish not to simply select useful covariates, but instead to select useful \emph{groups} of covariates.
+This motivates the use of \emph{group lasso} \cite{yuan_model_2006}, where we replace the objective in \eqref{eq:1} with
+\begin{equation}
+  \label{eq:2}
+  \operatorname*{min}_x \frac{1}{2} \lVert Ax - b \rVert_2^2 + \lambda \sum_{i=1}^N \lVert x_i \rVert_2,
+\end{equation}
+where $x_i$ is a subvector of $x$ containing only the coefficients corresponding to the $i$'th group, with $i \in [N]$.
+Note that when extending to the group lasso, the penalty term no longer involves the 1-norm but instead has the 2-norm.
+Although this may seem surprising, the 1-norm is separable, i.e., $\left\| \begin{pmatrix} a_1 \\ a_2 \end{pmatrix} \right\|_1 = \lVert a_1 \rVert_1 + \lVert a_2 \rVert_1$, and this would devolve back to the original lasso.
+Critically, the 2-norm in the regularizer is not squared, which yields an analogous geometry to the lasso, with singularities corresponding to solutions that are group-sparse (see \cite{yuan_model_2006}, Fig 1 for a helpful illustration of this phenomena).
+Note that for a singleton vector, $\lVert a \rVert_1 = \lVert a \rVert_2$, so when $N = n$, i.e., each feature is alone in its own atomic group, we can rewrite \eqref{eq:2} as
+\begin{align*}
+  \operatorname*{min}_x \frac{1}{2} \lVert Ax - b \rVert_2^2 + \lambda \sum_{i=1}^N \lVert x_i \rVert_2
+  &= \operatorname*{min}_x \frac{1}{2}  \lVert Ax - b \rVert_2^2 + \lambda \sum_{i=1}^N \lVert x_i \rVert_1
+  &= \operatorname*{min}_x \frac{1}{2} \lVert Ax - b \rVert_2^2 + \lambda  \lVert x \rVert_1    ,
+\end{align*}
+and we can recover the original lasso formulation in \eqref{eq:1} as a special case of the group lasso.
+
+Finally, the \emph{group lasso} can be further extended to accommodate \emph{overlapping groups} in the ``overlapping group lasso'' \cite{zhao_composite_2009,mairal_network_2010}.
+In this setting, rather than partitioning $x$ into disjoint subvectors, we let $G_i, i = [N]$ be an index set holding the indices of coefficients corresponding to the $i$'th group, i.e., $x_{G_i}$ is a vector of coefficients for group $i$, $x_{G_j}$ is a vector of coefficients for group $j$, and it may be the case that $G_i \cap G_j \neq \emptyset$.
+As a toy example, suppose $n=3$, and in this simple setting we have two groups, with $G_1 = \left\{ 1, 2 \right\}, G_2 = \left\{ 2, 3 \right\}$, such that $x_2$ is common to both $x_{G_1}$ and $x_{G_2}$, i.e., $G_1 \cap G_2 = \left\{ 2 \right\}$.
+In this setting, the overlapping group lasso objective is given by
+\begin{equation}
+  \label{eq:3}
+  \operatorname*{min}_x \frac{1}{2} \lVert Ax - b \rVert_2^2 + \lambda \sum_{i=1}^N \lVert x_{G_i} \rVert_2.
+\end{equation}
+The geometry of this problem is rather complicated, and there is some work (e.g., \cite{jacob_group_2009}) that proposes addressing the overlapping group lasso through latent variables, in essence, performing variable duplication to render the problem non-overlapping, and then using the standard group lasso formulation in \eqref{eq:2} to solve the problem.
+However, in the present work we will focus on directly optimize the objective given in \eqref{eq:3}, although as we shall see in \ref{sec:group-lasso-via}, our algorithmic approach will involve a sort of variable duplication, but with an update step that pulls our duplicated variables back toward one another.
+
+\section{Background: ADMM}
+\label{sec:background:-admm}
+The Alternating Direction Method of Multipliers (ADMM) is an algorithmic approach to optimization well suited to solving problems that can be decomposed as the sum of two problems in distinct variables, subject to linear constraints.
+The background we provide here will closely follow \cite{boyd_distributed_2011}, as this was our primary resource when endeavoring to learn the material.
+Our development here will be terse and limited, and we refer the reader to \cite{boyd_distributed_2011}, as the exposition given below chiefly consists of key highlights from this very useful text.
+
+ADMM is formulated to solve problems structured as
+\begin{equation}
+  \begin{aligned}
+    \label{eq:4}
+    \operatorname*{min}_{x,z} \qquad &f(x) + g(z) \\
+    \text{subject to} \qquad&Ax + Bz = c
+  \end{aligned}.
+\end{equation}
+It is closely related to the method of multipliers (a brief background is given in \cite{boyd_distributed_2011}) and proceeds by first constructing an augmented Lagrangian
+\begin{equation}
+  \label{eq:5}
+  L_{\rho}(x,z,y) = f(x) + g(z) + y^T (Ax + Bz - c) + \frac{\rho}{2} \lVert Ax + Bz - c \rVert_2^2,
+\end{equation}
+where $y$ is a dual variable, and the last term is the ``augmenting'' piece.
+Although augmenting may seem unnatural at first, we note that when the linear constraints are satisfied, this last term is identically 0 and thus inconsequential for the objective function at the optimum, and its inclusion makes the use of the \texttt{prox} operator natural during the optimization.
+ADMM is an iterative procedure, which given some initial values for $x,z,y$, proceeds as
+\begin{align}
+  \label{eq:6}
+  x^{k+1} &\leftarrow \operatorname*{argmin}_x L_{\rho}(x,z^k,y^k) \\
+  \label{eq:7}
+  z^{k+1} &\leftarrow \operatorname*{argmin}_x L_{\rho}(x^{k+1},z,y^k) \\
+  \label{eq:8}
+  y^{k+1} &\leftarrow y^k + \rho(Ax^{k+1} + Bz^{k+1} -c).
+\end{align}
+Of course, the rub lies in actually solving the subproblems given in \eqref{eq:6}\eqref{eq:7}, but using the augmented Lagrangian $L_{\rho}$ makes this tractable for certain problems.
+
+\section{Overlapping Group LASSO Via ADMM}
+\label{sec:group-lasso-via}
+A brief sketch of an ADMM approach for overlapping group lasso is given at the end of \S 6.4.2 of \cite{boyd_distributed_2011}, which we expand upon here.
+How can we rewrite \eqref{eq:3} in a form compatible with ADMM?
+In a similar spirit to the ``latent'' approach to overlapping group lasso \cite{jacob_group_2009,obozinski_group_2011}, we will create many \emph{new} variables which in a strict sense do not overlap, but then use linear equality constraints to impose the requirement that they equal a common anchoring global variable, which will indirectly enforce equality in the shared components.
+Slightly overloading the meaning of $x_i$ from the non-overlapping group lasso treatment, now let $x_i \overset{\Delta}{=} x_{G_i}, x_i \in \mathbb{R}^{\left| G_i \right|}$, and now introduce a new variable $z \in \mathbb{R}^n$, which will play the role of an ``anchoring variable.''
+For notational convenience, let $\tilde{z}_i \overset{\Delta}{=} z_{G_i}$, i.e., the components of $z$ corresponding to group $i$ for $i \in [N]$.
+Written in a form compatible with ADMM, we now have the objective
+\begin{equation}
+  \begin{aligned}
+  \label{eq:9}
+  \operatorname*{min}_{z,x_i, i \in [N]} \quad &\frac{1}{2} \lVert Az - b \rVert_2^2 + \lambda \sum_{i=1}^N \lVert x_i \rVert_2 \\
+  \text{such that} \quad & x_i - \tilde{z}_i = 0, \quad \forall i \in [N]
+  \end{aligned},
+\end{equation}
+which with minimal rearrangement (i.e., swapping the first and second terms) is written in a form compatible with ADMM.
+In addition, the term involving the sum of the $x_i$ is now decomposable, and thus the update for the $x_i$ can be done in parallel, which may be useful if the number of groups is very large.
+Now, our task is to give explicit forms for steps \eqref{eq:6}\eqref{eq:7}.
+Our update can be performed as
+\begin{align}
+  \label{eq:10}
+  x_i^{k+1} &\leftarrow \operatorname*{argmin}_{x_i} (\lambda \lVert x_i \rVert_2 + \left( y_i^k \right)^T(x_i - \tilde{z}_i^k) + \frac{\rho}{2} \lVert x_i - \tilde{z}_i^k \rVert_2^2) \\
+  \label{eq:11}
+  z^{k+1} &\leftarrow (A^TA + \rho I)^{-1}(A^T b + \rho(\bar{x}^{k+1} - \bar{y}^k)) \\
+  \label{eq:12}
+  y_i^{k+1} &\leftarrow y_i^k + x_i^{k+1} - \tilde{z}_i^{k+1},
+\end{align}
+where $\bar{x}, \bar{y}$ are obtained by averaging over $i$ at the relevant components.
+The operation at \eqref{eq:10} is precisely the proximal operator, which for group lasso is the vector soft thresholding operation, as given in \S 6.4.2, i.e.,
+\begin{equation}
+  \label{eq:13}
+  x_i^{k+1} = (1 - \frac{\lambda}{\rho} \lVert \tilde{z}_i^{k+1} + u^k \rVert_2^{-1})_+ (\tilde{z}_i^{k+1} + u^k)
+\end{equation}
+
+We summarize the approach in Algorithm \ref{alg:grp-lasso-admm}.
+\begin{algorithm}
+    \caption{Group LASSO Via ADMM}
+    \label{alg:grp-lasso-admm}
+    \begin{algorithmic}[1]
+      \Require{$x^0 \in $}
+      
+  \end{algorithmic}
+\end{algorithm}
+
+\section{Software Implementation}
+\label{sec:implementation}
+We implemented the procedure of Algorithm \ref{alg:grp-lasso-admm} in python 3.7.
+The package, which is for now incomplete, is available on github at \url{http://github.com/dankessler/608a-project}.
+
+\section{Experimental Results}
+\label{sec:experimental-results}
+
+
+\printbibliography
+
+\end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
