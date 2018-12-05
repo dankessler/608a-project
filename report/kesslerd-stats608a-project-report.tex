@@ -4,7 +4,7 @@
 \documentclass{article}
 
 \usepackage{amsmath,amssymb,physics,framed,mathtools}
-\usepackage{algorithm,algorithmicx,algpseudocode}
+\usepackage{algorithm,algpseudocode}
 \usepackage[utf8]{inputenc}
 \usepackage[style=numeric,citestyle=numeric]{biblatex}
 \addbibresource{refs.bib}
@@ -159,8 +159,29 @@ We summarize the approach in Algorithm \ref{alg:grp-lasso-admm}.
     \caption{Group LASSO Via ADMM}
     \label{alg:grp-lasso-admm}
     \begin{algorithmic}[1]
-      \Require{$x^0 \in $}
-      
+      \Require{$x^0 \in \mathbb{R}^n, \rho, \lambda, G$}
+      \State $z^0 \gets x^0$
+      \State $Q \gets (A^TA + \rho I)^{-1}$
+      \For{$i \in [N]$}
+      \State $x_i \gets x^0_{G_i}$
+      \State $y_i \gets \left\{ 0 \right\}^{\lvert G_i \rvert}$
+      \EndFor
+      \State $k \gets 0$ 
+      \While{not converged}
+      \For{$i \in [N]$}
+      \State $x_i^{k+1} \gets S_{\lambda/\rho}(\tilde{z}_i^{k+1} + y_i)$
+      \EndFor
+      \For{$j \in [n]$}
+      \State $T_j \gets \left\{ G_i: j \in G_i, i \in [N] \right\}$
+      \State $\bar{x}_j^{k+1} \gets \frac{\lvert \left\{ G_i : j \in G_i, i \in [N] \right\} \rvert}{2} \sum t $ % finish this mess
+      \EndFor
+      \State $\bar{y}^{k+1}$ % finish this mess
+      \State $z^{k+1} \gets Q \left( A^Tb + \rho(\bar{x}^{k+1} - \bar{y} \right)$
+      \For{$i \in [N]$}
+      \State $y_i^{k+1} \gets y_i^k + x_i^{k+1} - \tilde{z}_i^{k+1} $
+      \EndFor
+      \State $k \gets k+1$
+      \EndWhile
   \end{algorithmic}
 \end{algorithm}
 
@@ -172,6 +193,25 @@ The package, which is for now incomplete, is available on github at \url{http://
 \section{Experimental Results}
 \label{sec:experimental-results}
 
+\subsection{Lasso as a Special Case}
+\label{sec:lasso-as-special}
+
+\subsection{Non-overlapping Group Lasso as a Special Case}
+\label{sec:non-overl-group}
+
+\subsection{Overlapping Group Lasso}
+\label{sec:overl-group-lasso}
+
+\begin{itemize}
+\item type type type
+\item new item here
+\item 
+\end{itemize}
+
+\begin{align*}
+  \label{eq:14}
+  x \in \mathbb{R}^{n \times p} \mathbb{N} \int\limits_{}^{}
+\end{align*}
 
 \printbibliography
 
