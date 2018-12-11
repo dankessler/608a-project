@@ -11,7 +11,7 @@ sig2 = 0
 
 xstar,A,b = og.sim(m,n,grps,grate,comp,sig2)
 
-out = og.ladmm(xstar,A,b,l=0.5,niter=1000)
+out = og.ladmm(xstar,A,b,lam=0.5,niter=1000)
 print(xstar)
 print(out[0])
 print(out[1])
