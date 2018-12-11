@@ -6,7 +6,7 @@ def ladmm(x0, A, b, lam=1, r=1, niter=10, tol=1e-3):
     (m, n) = A.shape
     z = x0
     x = x0
-    u = np.zeros(n)
+    u = np.zeros((n, 1))
     Q = la.inv(A.T.dot(A) + r * np.eye(n))
     sthreshv = np.vectorize(sthresh)
     k = 0
@@ -21,47 +21,46 @@ def ladmm(x0, A, b, lam=1, r=1, niter=10, tol=1e-3):
 def admm(x0, A, b, grps, lam=1, r=1, niter=10, tol=1e-3):
     (m, n) = A.shape
     z = x0
-    x = x0
+    xs = [x0[gi] for gi in grps]
+    us = [np.zeros(len(gi)) for gi in grps]
     Q = la.inv(A.T.dot(A) + r * np.eye(n))
-    xs = [x[gi] for gi in grps]
-    ys = [np.zeros(len(gi)) for gi in grps]
     k = 0
     while k < niter:
-        xs = update_xs(z, ys, lam, r, grps)
-        z = update_z(xs, ys, grps, r, A, b, Q)
-        ys = update_ys(ys, xs, z, grps)
+        xs = update_xs(z, us, lam, r, grps)
+        z = update_z(xs, us, grps, r, A, b, Q)
+        us = update_us(us, xs, z, grps)
         k += 1
-    return (z, xs, ys)
+    return (z, xs, us)
 
 
-def update_xs(z, ys, l, r, grps):
-    N = len(ys)
-    xs = [Sthresh(z[grps[i]] + ys[i], l / r) for i in range(N)]
+def update_xs(z, us, l, r, grps):
+    N = len(us)
+    xs = [Sthresh(z[grps[i]] + us[i], l / r) for i in range(N)]
     return (xs)
 
 
-def update_z(xs, ys, grps, r, A, b, Q):
+def update_z(xs, us, grps, r, A, b, Q):
     n = A.shape[1]
     N = len(grps)
 
-    votes = np.zeros(n)
-    xsum = np.zeros(n)
-    ysum = np.zeros(n)
+    votes = np.zeros((n, 1))
+    xsum = np.zeros((n, 1))
+    usum = np.zeros((n, 1))
     for i in range(N):
         votes[grps[i]] += 1
         xsum[grps[i]] += xs[i]
-        ysum[grps[i]] += ys[i]
+        usum[grps[i]] += us[i]
     xbar = np.divide(xsum, votes)
-    ybar = np.divide(ysum, votes)
+    ubar = np.divide(usum, votes)
 
-    z = Q.dot(A.T.dot(b) + r * (xbar - ybar))
+    z = Q.dot(A.T.dot(b) + r * (xbar - ubar))
     return (z)
 
 
-def update_ys(ys, xs, z, grps):
+def update_us(us, xs, z, grps):
     N = len(grps)
-    ys = [ys[i] + xs[i] - z[grps[i]] for i in range(N)]
-    return (ys)
+    usnew = [us[i] + xs[i] - z[grps[i]] for i in range(N)]
+    return (usnew)
 
 
 def sthresh(a, thresh):
