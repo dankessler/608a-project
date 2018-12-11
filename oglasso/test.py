@@ -29,10 +29,11 @@ xstar[[0,1,2]] = 100
 b = A.dot(xstar) + np.random.randn(m,1)
 
 x0 = np.zeros((n,1))
-lasso = og.ladmm(x0,A,b,lam=10,niter=1000,r=.01)
-lasso[0]
-oglasso = og.admm(x0, A, b, grps, lam=0.5, niter = 100)
-oglasso[1][1]
+o1 = og.ladmm(x0,A,b,lam=10,niter=1000,r=1)
+o1[0]
+o2 = og.admm(x0, A, b, grps, lam=10, niter = 1000, r=1)
+o2[1][1]
+print('hi')
 
 
 
