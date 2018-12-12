@@ -95,22 +95,22 @@ def Sthresh(vec, thresh):
     return (scal * vec)
 
 
-def sim(m, n, grps, grate=0.5, comp=True, sig2=1):
+def sim(m, n, G, grate=0.5, comp=True, sig2=1):
     A = np.random.randn(m, n)
-    N = len(grps)
+    N = len(G)
 
     if comp:  # complement of union
         live = np.random.binomial(1, grate, N)
         mask = np.ones(n)  # mask starts on, turn stuff off
         for i in range(N):
-            mask[grps[i]] *= live[i]
+            mask[G[i]] *= live[i]
         xstar = np.random.randn(n) * mask
 
     else:
         live = np.random.binomial(1, grate, N)
         mask = np.zeros(n)  # mask starts off, turn stuff on
         for i in range(N):
-            mask[grps[i]] = 1 * live[i]
+            mask[G[i]] = 1 * live[i]
         xstar = np.random.randn(n) * mask
 
     b = A.dot(xstar) + sig2 * np.random.randn(m)
