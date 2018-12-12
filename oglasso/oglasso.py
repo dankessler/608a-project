@@ -15,36 +15,36 @@ def ladmm(x0, A, b, lam=1, r=1, niter=10, tol=1e-3):
         z = sthreshv(x + u, lam / r)
         u = u + x - z
         k += 1
-    return (z, x, u)
+    return (x, z, u)
 
 
-def admm(x0, A, b, grps, lam=1, r=1, niter=10, tol=1e-3):
+def admm(x0, A, b, G, lam=1, r=1, niter=10, tol=1e-3):
     (m, n) = A.shape
-    zs = [x0[gi] for gi in grps]
+    zs = [x0[gi] for gi in G]
     x = x0
-    us = [np.zeros(len(gi)) for gi in grps]
+    us = [np.zeros(len(gi)) for gi in G]
     Q = la.inv(A.T.dot(A) + r * np.eye(n))
     k = 0
     while k < niter:
-        x = update_x(zs, us, grps, r, A, b, Q)
-        zs = update_zs(x, us, lam, r, grps)
-        us = update_us(us, x, zs, grps)
+        x = update_x(zs, us, G, r, A, b, Q)
+        zs = update_zs(x, us, lam, r, G)
+        us = update_us(us, x, zs, G)
         k += 1
-    return (zs, x, us)
+    return (x, zs, us)
 
 
 
-def update_x(zs, us, grps, r, A, b, Q):
+def update_x(zs, us, G, r, A, b, Q):
     n = A.shape[1]
-    N = len(grps)
+    N = len(G)
 
     votes = np.zeros((n, 1))
     zsum = np.zeros((n, 1))
     usum = np.zeros((n, 1))
     for i in range(N):
-        votes[grps[i]] += 1
-        zsum[grps[i]] += zs[i]
-        usum[grps[i]] += us[i]
+        votes[G[i]] += 1
+        zsum[G[i]] += zs[i]
+        usum[G[i]] += us[i]
     zbar = np.divide(zsum, votes)
     ubar = np.divide(usum, votes)
 
@@ -52,16 +52,16 @@ def update_x(zs, us, grps, r, A, b, Q):
     return (x)
 
 
-def update_zs(x, us, lam, r, grps):
+def update_zs(x, us, lam, r, G):
     N = len(us)
-    zs = [Sthresh(x[grps[i]] + us[i], lam / r) for i in range(N)]
+    zs = [Sthresh(x[G[i]] + us[i], lam / r) for i in range(N)]
     return (zs)
 
 
 
-def update_us(us, x, zs, grps):
-    N = len(grps)
-    usnew = [us[i] + x[grps[i]] - zs[i] for i in range(N)]
+def update_us(us, x, zs, G):
+    N = len(G)
+    usnew = [us[i] + x[G[i]] - zs[i] for i in range(N)]
     return (usnew)
 
 
