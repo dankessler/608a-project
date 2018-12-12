@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # common settings
+np.random.seed(seed=1986)
 m = 50
 n = 100
 r = 1
