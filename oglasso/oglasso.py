@@ -123,21 +123,21 @@ def sim2(m, n, G, xstar):
     b = A.dot(xstar) + np.random.randn(m,1)
     return(A,b,G,xstar)
 
-def test2(A, b, G, x0, xstar, r,lam,eps=1e-2):
-    xhat = ladmm(x0, A, b, lam, r, niter=100)[0]
-    xhat[xhat < eps] = 0        # heavy handed threshold
+def test2(A, b, G, x0, xstar, r,lam,eps,niter):
+    xhat = ladmm(x0, A, b, lam, r, niter)[0]
+    xhat[np.abs(xhat) < eps] = 0        # heavy handed threshold
     pred = la.norm(A.dot(xstar) - A.dot(xhat),2)
     accu = la.norm(xstar - xhat,2)
-    tp = set(np.where(xstar > eps)[0]).intersection(set(np.where(xhat > eps)[0]))
-    prec = len(tp) / la.norm(xstar,0,0)
-    reca = len(tp) / la.norm(xhat,0,0)
+    tp = set(np.where(np.abs(xstar) > eps)[0]).intersection(set(np.where(np.abs(xhat) > eps)[0]))
+    prec = len(tp) / la.norm(xhat,0,0)
+    reca = len(tp) / la.norm(xstar,0,0)
     return({'pred':pred,
             'accu':accu,
             'prec':prec[0],
             'reca':reca[0],
             })
 
-def sim2test(m,n,G,xstar,x0,r,lam,eps):
+def sim2test(m,n,G,xstar,x0,r,lam,eps=1e-2,niter=100):
     A,b,G,xstar = sim2(m,n,G,xstar)
-    out = test2(A,b,G,x0,xstar,r,lam,eps)
+    out = test2(A,b,G,x0,xstar,r,lam,eps,niter)
     return(out)
