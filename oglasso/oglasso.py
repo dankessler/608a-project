@@ -116,3 +116,28 @@ def sim(m, n, G, grate=0.5, comp=True, sig2=1):
     b = A.dot(xstar) + sig2 * np.random.randn(m)
 
     return (xstar, A, b)
+
+def sim2(m, n, G, xstar):
+    A = np.random.randn(m,n)
+    N = len(G)
+    b = A.dot(xstar) + np.random.randn(m,1)
+    return(A,b,G,xstar)
+
+def test2(A, b, G, x0, xstar, r,lam,eps=1e-2):
+    xhat = ladmm(x0, A, b, lam, r, niter=100)[0]
+    xhat[xhat < eps] = 0        # heavy handed threshold
+    pred = la.norm(A.dot(xstar) - A.dot(xhat),2)
+    accu = la.norm(xstar - xhat,2)
+    tp = set(np.where(xstar > eps)[0]).intersection(set(np.where(xhat > eps)[0]))
+    prec = len(tp) / la.norm(xstar,0,0)
+    reca = len(tp) / la.norm(xhat,0,0)
+    return({'pred':pred,
+            'accu':accu,
+            'prec':prec[0],
+            'reca':reca[0],
+            })
+
+def sim2test(m,n,G,xstar,x0,r,lam,eps):
+    A,b,G,xstar = sim2(m,n,G,xstar)
+    out = test2(A,b,G,x0,xstar,r,lam,eps)
+    return(out)
